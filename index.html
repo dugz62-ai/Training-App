@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f1720">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Training">
+  <title>Douglas Training</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar"><h1 id="title">Training</h1><span id="subtitle"></span></header>
+  <main id="app"></main>
+  <div id="timer" class="timer" aria-live="polite">
+    <span class="tlabel">Rest</span>
+    <button data-rest="60">60s</button><button data-rest="90">90s</button><button data-rest="120">120s</button>
+    <span id="tdisplay" class="tdisplay">--</span>
+    <button id="tstop" class="tstop" aria-label="Stop timer">✕</button>
+  </div>
+  <nav class="nav">
+    <a href="#/today" data-nav="today">🏋️<span>Train</span></a>
+    <a href="#/history" data-nav="history">📈<span>History</span></a>
+    <a href="#/data" data-nav="data">💾<span>Backup</span></a>
+  </nav>
+  <div id="toast" class="toast"></div>
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
