@@ -7,7 +7,8 @@ const TZ = 'Africa/Johannesburg';
 // ---------- logging specs: [type, sets, short name for coach text] ----------
 // types: wr = kg + reps, r = reps, s = seconds, ws = kg + seconds, int = rounds + level, min = minutes, done = checkbox
 const SPEC = {
-  'Incline dumbbell press': ['wr', 4, 'Incline DB press'],
+  'Incline dumbbell press': ['wr', 4, 'Incline DB press'], // retired; kept so saved logs still format
+  'Single-arm incline dumbbell press': ['wr', 4, 'Single-arm incline DB press'],
   'Chest-supported row': ['wr', 4, 'Chest-supported row'],
   'Flat barbell bench press': ['wr', 3, 'Bench press'],
   'Low-to-high cable fly': ['wr', 3, 'Cable fly'],
@@ -20,6 +21,8 @@ const SPEC = {
   'Lat pulldown or assisted pull-up': ['wr', 4, 'Lat pulldown'],
   'Seated dumbbell shoulder press': ['wr', 3, 'Seated DB shoulder press'],
   'Single-arm kettlebell row': ['wr', 3, 'KB single-arm row'],
+  'Suitcase hold': ['ws', 3, 'Suitcase hold'],
+  'Overhead KB hold': ['ws', 3, 'Overhead KB hold'],
   'Straight-arm cable pulldown': ['wr', 3, 'Straight-arm pulldown'],
   'Cable external rotation': ['wr', 3, 'Cable ext rotation'],
   'KB side bends': ['ws', 3, 'KB side bends'],
@@ -97,7 +100,7 @@ const num = (v) => { const n = parseFloat(String(v).replace(',', '.')); return i
 const fmtNum = (n) => (Math.round(n * 100) / 100).toString();
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2200); }
 
-const UNIT = { r: 'reps', s: 's', int: 'rounds', min: 'min' };
+const UNIT = { r: 'reps', s: 's', ws: 's', int: 'rounds', min: 'min' };
 // compact text for one entry, e.g. "22.5kg 10/9/8/8" or "20kg×10, 22.5kg×8"
 function entryText(ex, e) {
   const [type] = specOf(ex);
@@ -119,9 +122,17 @@ function sessionText(s) {
   const def = SESSIONS[s.key];
   const lines = [`${def.label} – ${s.date}`, `Knee: ${s.knee || '?'}`];
   if (def.gym) { const wu = EX.warmup.filter((ex) => s.entries[ex.name]?.done).length; lines.push(`Warm-up: ${wu}/${EX.warmup.length}`); }
+  const listed = new Set();
   for (const ex of def.items) {
+    listed.add(ex.name);
     const e = s.entries[ex.name]; if (!e) continue;
     const t = entryText(ex, e); if (t) lines.push(`${specOf(ex)[2]}: ${t}`);
+  }
+  // Exercises removed from the programme (old Incline dumbbell press logs) still print.
+  const warmupNames = new Set(EX.warmup.map((ex) => ex.name));
+  for (const name of Object.keys(s.entries || {})) {
+    if (listed.has(name) || warmupNames.has(name)) continue;
+    const t = entryText({ name }, s.entries[name]); if (t) lines.push(`${specOf({ name })[2]}: ${t}`);
   }
   if (filled(s.notes)) lines.push(`Notes: ${s.notes.trim()}`);
   return lines.join('\n');
@@ -172,12 +183,28 @@ document.addEventListener('click', (e) => {
 // ---------- session screen ----------
 let cur = null; // { key, date, knee, notes, entries }
 
+function blankSets(n) { const sets = []; for (let i = 0; i < n; i++) sets.push({ w: '', r: '' }); return sets; }
+// Old drafts and saved sessions predate new exercises. Fill any missing rows so the card can render.
+function ensureEntries(draft, key) {
+  const def = SESSIONS[key];
+  draft.entries = draft.entries || {};
+  const all = (def.gym ? EX.warmup : []).concat(def.items);
+  for (const ex of all) {
+    const [type, n] = specOf(ex);
+    const e = draft.entries[ex.name];
+    if (!e) { draft.entries[ex.name] = type === 'done' ? { done: false } : { sets: blankSets(n) }; continue; }
+    if (type === 'done') { if (e.done === undefined) e.done = false; continue; }
+    if (!Array.isArray(e.sets)) e.sets = [];
+    while (e.sets.length < n) e.sets.push({ w: '', r: '' });
+  }
+  return draft;
+}
 function newDraft(key) {
   const date = todayISO();
   const d = loadDraft(key);
-  if (d && d._day === date) return d;
+  if (d && d._day === date) return ensureEntries(d, key);
   const saved = load().find((x) => x.key === key && x.date === date);
-  if (saved) { const c = JSON.parse(JSON.stringify(saved)); c._day = date; return c; } // re-open today's saved session for edits
+  if (saved) { const c = JSON.parse(JSON.stringify(saved)); c._day = date; return ensureEntries(c, key); } // re-open today's saved session for edits
   const entries = {};
   const def = SESSIONS[key];
   const all = (def.gym ? EX.warmup : []).concat(def.items);
@@ -213,7 +240,7 @@ function exCard(ex, opts = {}) {
   if (type === 'done') {
     body = `<label class="check"><input type="checkbox" data-done ${e.done ? 'checked' : ''}> Done</label>`;
   } else {
-    const rows = e.sets.map((s, i) => {
+    const rows = (e.sets || []).map((s, i) => {
       const ph = lastSets[i] ? lastSets[i].r : '';
       if (type === 'wr' || type === 'ws' || type === 'int') {
         return `<div class="setrow"><div class="setno">${type === 'int' ? '' : i + 1}</div>${type === 'int' ? field(type, i, 'r', s.r, ph) + field(type, i, 'w', s.w, '') : field(type, i, 'w', s.w, '') + field(type, i, 'r', s.r, ph)}</div>`;
@@ -319,7 +346,8 @@ function renderHistory() {
       <div class="row2"><button class="btn ghost" data-share="${esc(s.id)}">Send to coach</button><button class="btn danger" data-del="${esc(s.id)}">Delete</button></div></details>`).join('');
   // progress per exercise, oldest → newest
   const asc = [...ss].reverse();
-  const exs = [EX.dayA, EX.dayB, EX.dayC, EX.intervals, [EX.mobility.find((e) => e.name === 'Dead hang')], [YOGA]].flat();
+  const retired = [{ name: 'Incline dumbbell press' }];
+  const exs = [EX.dayA, EX.dayB, EX.dayC, EX.intervals, [EX.mobility.find((e) => e.name === 'Dead hang')], [YOGA], retired].flat();
   const charts = exs.map((ex) => {
     const pts = asc.map((s) => s.entries[ex.name] && metricFor(ex, s.entries[ex.name]) ? { d: s.date, ...metricFor(ex, s.entries[ex.name]) } : null).filter(Boolean);
     if (!pts.length) return '';

@@ -36,12 +36,12 @@ const warmup = [
 
 const dayA = [
   {
-    name: "Incline dumbbell press",
-    dose: "4 × 8–10",
-    cues: ["Bench at 30–45°, feet planted", "Tuck the pelvis, ribs down, shoulder blades pinned back", "Lower until the dumbbells touch the outside of your chest", "Press up and slightly in, squeezing the chest"],
-    mistake: "Arching hard so it turns into a flat press. Keep the ribs down.",
-    knee: "Get the dumbbells up with your hands, not by kicking them off your knees.",
-    links: [{ title: "How To Do Incline Dumbbell Press Correctly", site: "YouTube · Jack Hanrahan Fitness", href: yt("OC7Qs_SAO2E") }],
+    name: "Single-arm incline dumbbell press",
+    dose: "4 × 8–10 each side",
+    cues: ["Bench at 30–45°, free hand braced on the bench or hip", "Ribs down — don't let the torso twist toward the working side", "Lower to chest level under control", "Press up and slightly in"],
+    mistake: "Rotating or shrugging toward the dumbbell.",
+    knee: "Get the dumbbell up with your hand, not by kicking it off your knee.",
+    links: [{ title: "How to do a Single-Arm Incline Dumbbell Chest Press", site: "YouTube · NASM", href: yt("iJ-GwVeUuCg") }],
   },
   {
     name: "Chest-supported row",
@@ -147,8 +147,8 @@ const dayB = [
   },
   {
     name: "Single-arm kettlebell row",
-    dose: "3 × 10 per arm",
-    cues: ["Hinge with a flat back, free hand on a bench", "Torso square to the floor", "Pull the bell to your hip with the elbow close", "Lower under control to a full stretch"],
+    dose: "3 × 10 per arm · alternate KB and DB week to week",
+    cues: ["Hinge with a flat back, free hand on a bench", "Torso square to the floor", "Pull the bell to your hip with the elbow close", "Lower under control to a full stretch", "Single-arm DB row is the same pattern — swap the kettlebell for a dumbbell on alternate weeks"],
     mistake: "Twisting the torso open to lift the bell.",
     knee: "Stand in a split stance with your hand on the bench. Don't kneel on the bench with the sore knee.",
     links: [{ title: "Tutorial: Kettlebell Single Arm Row", site: "YouTube · Keanu Soto", href: yt("rQqDQkbbNrk") }],
@@ -208,6 +208,14 @@ const dayB = [
     mistake: "Lifting too high and crunching the lower back.",
     knee: "Lift arms only (or arms and the good leg) if lifting the sore leg hurts.",
     links: [{ title: "Superman Hold Exercise | Form, Tips & Common Mistakes", site: "YouTube · FIT.nl", href: yt("g0Kr9Wd3CeQ") }],
+  },
+  {
+    name: "Suitcase hold",
+    dose: "3 × 30–40s each side",
+    cues: ["Heavy dumbbell or kettlebell in one hand", "Stand tall, shoulders level", "Don't lean toward or away from the weight", "Hold still — no steps"],
+    mistake: "Leaning over to the side of the weight.",
+    knee: "Static only. No walking. Walking carries come back after the physio clears the knee.",
+    links: [{ title: "Suitcase Hold", site: "YouTube · Mike Boyle Strength & Conditioning", href: yt("lHuqn4aZcVI") }],
   },
 ];
 
@@ -306,6 +314,14 @@ const dayC = [
       { title: "The Bird-Dog: Proper Form & Common Mistakes", site: "YouTube · Mission Move PT", href: yt("omBMXz-6RaM") },
       { title: "How to Do the Bird Dog Exercise", site: "YouTube · Hinge Health", href: yt("xEDnlOxeJH4") },
     ],
+  },
+  {
+    name: "Overhead KB hold",
+    dose: "3 × 30s each side",
+    cues: ["Arm locked out, bicep by the ear", "Ribs down, glutes squeezed", "Bell stacked over the shoulder — stand still, no steps", "Stop if the lower back arches"],
+    mistake: "Arching the lower back to keep the bell up.",
+    knee: "Static only. No walking. Walking carries come back after the physio clears the knee.",
+    links: [{ title: "Single arm overhead hold", site: "YouTube · Exercise Physiology Brisbane", href: yt("mXKFXCuJTs0") }],
   },
 ];
 
