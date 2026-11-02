@@ -43,6 +43,16 @@ h3 { font-size: 16px; margin: 0; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; }
 .card.done { border-color: var(--good); }
 .exhead { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+.exbtns { display: flex; gap: 6px; flex: none; }
+.micbtn { flex: none; min-width: 44px; min-height: 40px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--card2); font-size: 18px; }
+.micbtn.on { background: var(--bad); color: #fff; border-color: var(--bad); }
+.voicebox { margin-top: 10px; }
+.voicebox textarea { min-height: 64px; }
+.voice-msg { color: var(--warn); font-size: 14px; margin: 0 0 8px; }
+.voice-parsed { margin: 8px 0 0; font-weight: 650; }
+.voice-parsed.bad { color: var(--bad); font-weight: 500; }
+.noteshead { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 14px; }
+.noteshead h3 { margin: 0; }
 .dose { color: var(--accent); font-weight: 600; font-size: 14px; margin-top: 2px; }
 .last { color: var(--muted); font-size: 13px; margin-top: 4px; }
 .howbtn { flex: none; min-height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--card2); font-size: 14px; }

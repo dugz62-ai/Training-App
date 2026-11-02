@@ -230,6 +230,277 @@ function newDraft(key) {
   return { key, date, _day: date, knee: '', notes: '', entries };
 }
 
+// ---------- voice logging ----------
+// Web Speech API where the browser allows it. iOS home-screen (standalone) often
+// blocks it; the same parser runs on typed text, including iOS keyboard dictation.
+const speechCtor = () => window.SpeechRecognition || window.webkitSpeechRecognition || null;
+const standaloneApp = window.navigator.standalone === true || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+const VOICE_HINT = { wr: '30 kg 8 8 7', ws: '24 kg 35 32 30', s: '45 seconds', r: '10 10 8', int: '4 rounds damper 5', min: '35 minutes' };
+const WORD_NUM = { zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
+const TENS_WORDS = new Set(['twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety']);
+let recCtrl = null;
+
+function voiceTokens(raw) {
+  let s = String(raw || '').toLowerCase().replace(/½/g, ' and a half').replace(/¼/g, ' and a quarter');
+  s = s.replace(/(\d),(\d)/g, '$1.$2');
+  s = s.replace(/\b(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)-(one|two|three|four|five|six|seven|eight|nine)\b/g, '$1 $2');
+  s = s.replace(/\b(each|per)\s+(side|arm|hand)\b/g, ' ').replace(/\bboth\s+sides\b/g, ' ').replace(/\ba\s+side\b/g, ' ');
+  s = s.replace(/\bkilograms?\b/g, ' kg ').replace(/\bkilos?\b/g, ' kg ');
+  s = s.replace(/\bseconds?\b/g, ' sec ').replace(/\bsecs?\b/g, ' sec ');
+  s = s.replace(/\bminutes?\b/g, ' min ').replace(/\bmins?\b/g, ' min ');
+  s = s.replace(/\brepetitions?\b/g, ' rep ').replace(/\breps?\b/g, ' rep ');
+  s = s.replace(/\brounds?\b/g, ' round ').replace(/\b(damper|level|lvl)\b/g, ' lvl ');
+  s = s.replace(/\b(point|dot)\b/g, ' point ');
+  s = s.replace(/(\d+(?:\.\d+)?)(kg|sec|min|rep|round|lvl)(?=\d|\s|$)/g, '$1 $2 ');
+  s = s.replace(/[^a-z0-9.\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  return s ? s.split(' ') : [];
+}
+function readFraction(tok, i) {
+  if (tok[i] !== 'and') return null;
+  let j = i + 1;
+  if (tok[j] === 'a' || tok[j] === 'an' || tok[j] === 'one') j++;
+  if (tok[j] === 'half') return { add: 0.5, next: j + 1 };
+  if (tok[j] === 'quarter') return { add: 0.25, next: j + 1 };
+  return null;
+}
+function readNumber(tok, i) {
+  const t = tok[i];
+  if (t === 'half') return { n: 0.5, next: i + 1 };
+  if ((t === 'a' || t === 'an') && tok[i + 1] === 'half') return { n: 0.5, next: i + 2 };
+  if ((t === 'a' || t === 'an') && tok[i + 1] === 'quarter') return { n: 0.25, next: i + 2 };
+  let n = null, next = i + 1;
+  if (/^\d+(?:\.\d+)?$/.test(t)) n = parseFloat(t);
+  else if (WORD_NUM[t] !== undefined) {
+    n = WORD_NUM[t];
+    if (TENS_WORDS.has(t) && WORD_NUM[tok[next]] !== undefined && WORD_NUM[tok[next]] < 10) { n += WORD_NUM[tok[next]]; next++; }
+  } else return null;
+  if (tok[next] === 'point') {
+    const f = tok[next + 1];
+    if (/^\d+$/.test(f || '')) { n = parseFloat(String(n) + '.' + f); next += 2; }
+    else if (WORD_NUM[f] !== undefined && WORD_NUM[f] < 10) { n += WORD_NUM[f] / 10; next += 2; }
+  }
+  const frac = readFraction(tok, next);
+  if (frac) { n += frac.add; next = frac.next; }
+  return { n, next };
+}
+function voiceItems(text) {
+  const tok = voiceTokens(text);
+  const skip = new Set(['and', 'for', 'of', 'the', 'at', 'with', 'on', 'by', 'times', 'time', 'set', 'sets', 'hold', 'holds', 'about', 'around', 'roughly', 'just', 'x', 'to']);
+  const units = new Set(['kg', 'sec', 'min', 'rep', 'round', 'lvl']);
+  const out = [];
+  for (let i = 0; i < tok.length;) {
+    const got = readNumber(tok, i);
+    if (got) {
+      i = got.next;
+      let unit = null;
+      if (units.has(tok[i])) { unit = tok[i]; i++; }
+      out.push({ n: got.n, unit });
+      continue;
+    }
+    i++;
+    if (skip.has(tok[i - 1]) || units.has(tok[i - 1])) continue;
+  }
+  return out;
+}
+function inferWeight(all, nSets, type) {
+  if (!all.length) return null;
+  // Seconds sit in the same range as a kettlebell, so a timed hold needs "kg" or one extra number.
+  if (type === 'ws') {
+    if (all.length === nSets + 1 || (!Number.isInteger(all[0].n) && all.length > 1)) return { weights: [all[0]], works: all.slice(1) };
+    return null;
+  }
+  const workish = (it) => Number.isInteger(it.n) && it.n <= 30;
+  const heavy = (it) => !Number.isInteger(it.n) || it.n >= 15;
+  if (all.length >= 4 && all.length % 2 === 0 && all.length / 2 <= nSets) {
+    const weights = [], works = [];
+    let ok = true;
+    for (let i = 0; i < all.length; i += 2) {
+      if (!workish(all[i + 1]) || !heavy(all[i])) { ok = false; break; }
+      weights.push(all[i]); works.push(all[i + 1]);
+    }
+    if (ok) return { weights, works };
+  }
+  if (all.length === nSets + 1) return { weights: [all[0]], works: all.slice(1) };
+  if (all.length > 1 && all.length <= nSets) {
+    const rest = all.slice(1), first = all[0];
+    if (rest.every(workish) && heavy(first) && first.n > Math.max(...rest.map((it) => it.n))) return { weights: [first], works: rest };
+  }
+  return null;
+}
+function voiceSummary(type, sets) {
+  const fake = sets.map((s) => ({ w: s.w ?? '', r: s.r ?? '' }));
+  const withR = fake.filter((s) => filled(s.r));
+  if (!withR.length) {
+    const w = fake.find((s) => filled(s.w));
+    return w ? (type === 'int' ? 'level ' + w.w : w.w + ' kg') + ' — say the reps or time too' : '';
+  }
+  if (type === 'r') return withR.map((s) => s.r).join('/');
+  if (type === 's') return withR.map((s) => s.r + 's').join(' / ');
+  if (type === 'min') return withR[0].r + ' min';
+  if (type === 'int') return withR[0].r + ' rounds' + (filled(withR[0].w) ? ' @ level ' + withR[0].w : '');
+  const suffix = type === 'ws' ? 's' : '';
+  const sep = type === 'ws' ? ' / ' : '/';
+  const ws = withR.map((s) => (filled(s.w) ? s.w : ''));
+  if (ws.every((w) => w === ws[0])) return (ws[0] ? ws[0] + 'kg ' : '') + withR.map((s) => s.r + suffix).join(sep);
+  return withR.map((s, i) => (ws[i] ? ws[i] + 'kg×' : '') + s.r + suffix).join(', ');
+}
+function parseVoice(text, type, nSets) {
+  const items = voiceItems(text);
+  if (!items.length) return { ok: false, error: 'No numbers in that. Try “' + (VOICE_HINT[type] || '30 kg 8 8 7') + '”.' };
+  const fmt = (n) => fmtNum(n);
+  let sets = [];
+  if (type === 's' || type === 'r' || type === 'min') {
+    const works = items.filter((it) => it.unit !== 'kg' && it.unit !== 'lvl');
+    (works.length ? works : items).slice(0, nSets).forEach((it) => sets.push({ r: fmt(it.n) }));
+  } else if (type === 'int') {
+    const lvl = items.find((it) => it.unit === 'lvl');
+    let rounds = items.find((it) => it.unit === 'round') || items.find((it) => it.unit !== 'lvl' && it.unit !== 'kg');
+    if (!rounds) rounds = items[0];
+    if (!lvl && items.length >= 2) {
+      const other = items.find((it) => it !== rounds && it.unit !== 'round');
+      sets = [{ r: fmt(rounds.n), w: other ? fmt(other.n) : '' }];
+    } else sets = [{ r: fmt(rounds.n), w: lvl ? fmt(lvl.n) : '' }];
+  } else {
+    let weights = items.filter((it) => it.unit === 'kg');
+    let works = items.filter((it) => it.unit !== 'kg' && it.unit !== 'lvl');
+    if (!weights.length) {
+      const inferred = inferWeight(items.filter((it) => it.unit !== 'lvl'), nSets, type);
+      if (inferred) { weights = inferred.weights; works = inferred.works; }
+    }
+    if (weights.length > 1 && weights.length === works.length) {
+      for (let i = 0; i < works.length && i < nSets; i++) sets.push({ w: fmt(weights[i].n), r: fmt(works[i].n) });
+    } else if (weights.length && works.length) {
+      const w = fmt(weights[0].n);
+      works.slice(0, nSets).forEach((it) => sets.push({ w, r: fmt(it.n) }));
+    } else if (weights.length) {
+      sets.push({ w: fmt(weights[0].n), r: '' });
+    } else {
+      works.slice(0, nSets).forEach((it) => sets.push({ r: fmt(it.n) }));
+    }
+  }
+  if (!sets.length) return { ok: false, error: 'No numbers in that. Try “' + (VOICE_HINT[type] || '30 kg 8 8 7') + '”.' };
+  const summary = voiceSummary(type, sets);
+  if (!summary) return { ok: false, error: 'Could not read that. Try “' + (VOICE_HINT[type] || '30 kg 8 8 7') + '”.' };
+  return { ok: true, sets, summary };
+}
+function voiceFailMessage(reason) {
+  const typed = ' Type it in the box — the iOS keyboard has its own mic.';
+  if (reason === 'unavailable' || reason === 'service-not-allowed') {
+    return (standaloneApp ? 'This home-screen app can’t use the mic directly.' : 'Voice recognition isn’t available in this browser.') + typed;
+  }
+  if (reason === 'not-allowed' || reason === 'audio-capture') return 'Microphone permission was blocked.' + typed;
+  if (reason === 'network') return 'Speech recognition needs a connection.' + typed;
+  if (reason === 'no-speech') return 'Didn’t hear anything. Try again, or type it.';
+  return 'Voice didn’t start.' + typed;
+}
+function stopRec() {
+  const rec = recCtrl; recCtrl = null;
+  if (rec) { try { rec.onend = null; rec.onerror = null; rec.onresult = null; rec.stop(); } catch {} }
+  document.querySelectorAll('.micbtn.on').forEach((b) => { b.classList.remove('on'); b.setAttribute('aria-pressed', 'false'); b.textContent = '🎤'; });
+}
+function openVoiceBox(box, message) {
+  box.hidden = false;
+  const msg = $('.voice-msg', box);
+  msg.hidden = !message;
+  msg.textContent = message || '';
+  const ta = $('[data-voice-text]', box);
+  if (!message) ta.placeholder = ta.dataset.hint || '';
+  refreshVoicePreview(box);
+  return ta;
+}
+function refreshVoicePreview(box) {
+  const ta = $('[data-voice-text]', box);
+  const out = $('.voice-parsed', box);
+  const apply = $('[data-voice-apply]', box);
+  if (box.dataset.voiceKind === 'notes') {
+    const text = ta.value.trim();
+    const merged = [cur && cur.notes, text].filter((s) => filled(s)).join('\n');
+    out.classList.toggle('bad', !text);
+    out.textContent = text ? 'Notes will read: ' + merged : 'Say or type a note first.';
+    apply.disabled = !text;
+    return;
+  }
+  const parsed = parseVoice(ta.value, box.dataset.voiceType, +box.dataset.voiceSets || 1);
+  out.classList.toggle('bad', !parsed.ok);
+  out.textContent = parsed.ok ? 'Will log: ' + parsed.summary : parsed.error;
+  apply.disabled = !parsed.ok;
+  box._parsed = parsed;
+}
+function applyVoice(box) {
+  if (box.dataset.voiceKind === 'notes') {
+    const text = $('[data-voice-text]', box).value.trim();
+    if (!text || !cur) return;
+    cur.notes = [cur.notes, text].filter((s) => filled(s)).join('\n');
+    const notes = $('#snotes'); if (notes) notes.value = cur.notes;
+    saveDraft(cur.key, cur);
+    box.hidden = true;
+    toast('Note added');
+    return;
+  }
+  const parsed = box._parsed;
+  if (!parsed || !parsed.ok || !cur) return;
+  const card = box.closest('[data-ex]');
+  const en = cur.entries[card.dataset.ex];
+  if (!en || !en.sets) return;
+    parsed.sets.forEach((s, i) => {
+    if (!en.sets[i]) return;
+    if (filled(s.w)) en.sets[i].w = s.w;
+    if (filled(s.r)) en.sets[i].r = s.r;
+  });
+  if (parsed.sets.some((s) => filled(s.r))) {
+    for (let i = parsed.sets.length; i < en.sets.length; i++) en.sets[i].r = '';
+  }
+  en.sets.forEach((s, i) => {
+    const wIn = card.querySelector(`input[data-set="${i}"][data-k="w"]`);
+    const rIn = card.querySelector(`input[data-set="${i}"][data-k="r"]`);
+    if (wIn) wIn.value = s.w;
+    if (rIn) rIn.value = s.r;
+  });
+  saveDraft(cur.key, cur);
+  box.hidden = true;
+  toast('Logged — check the sets');
+}
+function listenInto(box, button) {
+  stopRec();
+  document.querySelectorAll('.voicebox').forEach((b) => { if (b !== box) b.hidden = true; });
+  const SpeechRec = speechCtor();
+  if (!SpeechRec) { openVoiceBox(box, voiceFailMessage('unavailable')).focus(); return; }
+  let heard = false, failed = false;
+  let rec;
+  try { rec = new SpeechRec(); } catch { openVoiceBox(box, voiceFailMessage('unavailable')).focus(); return; }
+  recCtrl = rec;
+  rec.lang = 'en-ZA';
+  rec.interimResults = true;
+  rec.continuous = false;
+  rec.maxAlternatives = 1;
+  button.classList.add('on');
+  button.setAttribute('aria-pressed', 'true');
+  button.textContent = '●';
+  const ta = openVoiceBox(box, '');
+  rec.onresult = (e) => {
+    let text = '';
+    for (let i = 0; i < e.results.length; i++) text += e.results[i][0].transcript;
+    heard = true;
+    ta.value = text.trim();
+    refreshVoicePreview(box);
+  };
+  rec.onerror = (e) => {
+    const code = (e && e.error) || 'error';
+    if (code === 'aborted') return;
+    failed = true;
+    stopRec();
+    openVoiceBox(box, voiceFailMessage(code)).focus();
+  };
+  rec.onend = () => {
+    if (recCtrl === rec) recCtrl = null;
+    button.classList.remove('on');
+    button.setAttribute('aria-pressed', 'false');
+    button.textContent = '🎤';
+    if (!failed && !heard && !ta.value.trim()) openVoiceBox(box, voiceFailMessage('no-speech'));
+  };
+  try { rec.start(); } catch { stopRec(); openVoiceBox(box, voiceFailMessage('unavailable')).focus(); }
+}
+
 function field(type, i, which, val, ph) {
   const unit = which === 'w' ? (type === 'int' ? 'lvl' : 'kg') : (UNIT[type] || 'reps');
   const mode = which === 'w' ? 'decimal' : 'numeric';
@@ -255,12 +526,19 @@ function exCard(ex, opts = {}) {
     }).join('');
     body = `<div class="sets">${rows}</div>`;
   }
+  const voice = type === 'done' ? '' : `<div class="voicebox" hidden data-voice-kind="sets" data-voice-type="${esc(type)}" data-voice-sets="${(e.sets || []).length}">
+      <p class="voice-msg" hidden></p>
+      <textarea data-voice-text data-hint="${esc(VOICE_HINT[type] || '')}" placeholder="${esc(VOICE_HINT[type] || '')}" aria-label="Say or type ${esc(ex.name)}"></textarea>
+      <div class="voice-parsed" aria-live="polite"></div>
+      <div class="row2"><button type="button" class="btn primary" data-voice-apply disabled>Use this</button><button type="button" class="btn ghost" data-voice-cancel>Cancel</button></div></div>`;
+  const mic = type === 'done' ? '' : `<button type="button" class="micbtn" data-mic aria-pressed="false" aria-label="Log ${esc(ex.name)} by voice">🎤</button>`;
   const links = ex.links.map((l) => `<a href="${esc(l.href)}" target="_blank" rel="noopener">▶ ${esc(l.title)}<small>${esc(l.site)}</small></a>`).join('');
   return `<div class="card ex ${type === 'done' && e.done ? 'done' : ''}" data-ex="${esc(ex.name)}">
     <div class="exhead"><div><h3>${esc(ex.name)}</h3><div class="dose">${esc(ex.dose)}</div>
       ${lastTxt ? `<div class="last">Last time: ${esc(lastTxt)} <span class="muted">(${esc(last.date)})</span></div>` : (type !== 'done' && !opts.noLast ? '<div class="last">Last time: –</div>' : '')}</div>
-      <button class="howbtn" data-how aria-expanded="false">How to ▾</button></div>
+      <div class="exbtns">${mic}<button type="button" class="howbtn" data-how aria-expanded="false">How to ▾</button></div></div>
     ${body}
+    ${voice}
     <div class="how"><ul>${ex.cues.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>
       ${ex.knee ? `<div class="knee">🦵 <b>Knee:</b> ${esc(ex.knee)}</div>` : ''}
       <div class="avoid">✕ <b>Avoid:</b> ${esc(ex.mistake)}</div>
@@ -287,7 +565,14 @@ function renderSession(key) {
       : def.items.map((ex) => exCard(ex)).join('')}
     <div class="card"><h3>Knee today</h3>
       <div class="seg"><button data-knee="ok" class="${cur.knee === 'ok' ? 'on' : ''}">👍 OK</button><button data-knee="sore" class="${cur.knee === 'sore' ? 'on' : ''}">⚠ Sore</button></div>
-      <h3 style="margin-top:14px">Notes</h3><textarea id="snotes" placeholder="How did it feel? Anything to flag?">${esc(cur.notes)}</textarea></div>
+      <div class="noteshead"><h3>Notes</h3><button type="button" class="micbtn" data-mic-notes aria-pressed="false" aria-label="Dictate notes">🎤</button></div>
+      <textarea id="snotes" placeholder="How did it feel? Anything to flag?">${esc(cur.notes)}</textarea>
+      <div class="voicebox" hidden data-voice-kind="notes" id="notes-voice">
+        <p class="voice-msg" hidden></p>
+        <textarea data-voice-text placeholder="How the session felt" aria-label="Say or type a note"></textarea>
+        <div class="voice-parsed" aria-live="polite"></div>
+        <div class="row2"><button type="button" class="btn primary" data-voice-apply disabled>Use this</button><button type="button" class="btn ghost" data-voice-cancel>Cancel</button></div>
+      </div></div>
     <button class="btn primary" id="save">Save session</button>
     <button class="btn ghost" id="send">Send to coach</button>
     <p class="muted small" style="text-align:center">Inputs auto-save as a draft on this phone until you press Save.</p>`;
@@ -297,6 +582,7 @@ function renderSession(key) {
 function onSessionInput(e) {
   if (!cur) return;
   const t = e.target;
+  if (t.matches && t.matches('[data-voice-text]')) { const box = t.closest('.voicebox'); if (box) refreshVoicePreview(box); return; }
   if (t.id === 'snotes') cur.notes = t.value;
   else if (t.id === 'sdate') cur.date = t.value || todayISO();
   else {
@@ -408,6 +694,14 @@ function importData(file) {
 document.addEventListener('input', onSessionInput);
 document.addEventListener('change', (e) => { if (e.target.id === 'import' && e.target.files[0]) importData(e.target.files[0]); else onSessionInput(e); });
 document.addEventListener('click', (e) => {
+  const mic = e.target.closest('[data-mic]');
+  if (mic && cur) { const box = mic.closest('[data-ex]') && mic.closest('[data-ex]').querySelector('.voicebox'); if (box) listenInto(box, mic); return; }
+  const micN = e.target.closest('[data-mic-notes]');
+  if (micN && cur) { const box = $('#notes-voice'); if (box) listenInto(box, micN); return; }
+  const apply = e.target.closest('[data-voice-apply]');
+  if (apply && !apply.disabled) { applyVoice(apply.closest('.voicebox')); return; }
+  const cancel = e.target.closest('[data-voice-cancel]');
+  if (cancel) { stopRec(); const box = cancel.closest('.voicebox'); if (box) box.hidden = true; return; }
   const how = e.target.closest('[data-how]');
   if (how) { const c = how.closest('.card'); const open = c.classList.toggle('open'); how.setAttribute('aria-expanded', open); how.textContent = open ? 'Hide ▴' : 'How to ▾'; return; }
   const k = e.target.closest('[data-knee]');
@@ -422,6 +716,7 @@ document.addEventListener('click', (e) => {
 });
 
 function route() {
+  stopRec();
   const h = location.hash || '#/today';
   let nav = 'today';
   window.scrollTo(0, 0);
@@ -436,5 +731,5 @@ window.addEventListener('hashchange', route);
 route();
 
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
-window.__dt = { sessionText, load }; // for testing
+window.__dt = { sessionText, load, parseVoice }; // for testing
 })();
