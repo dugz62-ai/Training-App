@@ -1,5 +1,5 @@
 // Simple offline cache: app shell is cache-first, refreshed in the background.
-const CACHE = 'training-v1.2';
+const CACHE = 'training-v1.3';
 const ASSETS = ['./', './index.html', './styles.css', './app.js', './data.js', './manifest.json',
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
 

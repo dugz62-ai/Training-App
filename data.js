@@ -3,14 +3,6 @@ const yt = (id) => `https://www.youtube.com/watch?v=${id}`;
 
 const warmup = [
   {
-    name: "Arm bike or upper-body bike",
-    dose: "5 min easy",
-    cues: ["Crank axle at about shoulder height", "Soft elbows at full reach, never locked", "Sit tall, shoulders down, smooth rhythm", "Mix forward and backward cranking"],
-    mistake: "Going hard straight away. This is just to get warm.",
-    knee: "Seated arm bike only. Keep feet flat and legs still.",
-    links: [{ title: "Exercise Tutorial: Technogym Arm Ergometer", site: "YouTube · Travis Tarrant", href: yt("BLVu198om5g") }],
-  },
-  {
     name: "Thoracic rotations",
     dose: "8 each side",
     cues: ["Lie on your side, knees bent and stacked", "Arms out in front, palms together", "Open the top arm across and follow it with your eyes", "Breathe out as you rotate and let the shoulder sink"],
@@ -32,6 +24,19 @@ const warmup = [
     mistake: "Bending the elbows or arching the back to get it over.",
     links: [{ title: "Band Shoulder Dislocates", site: "YouTube · T Nation", href: yt("th1CUY49IzY") }],
   },
+];
+
+// Day A only. The other gym days use `warmup` (no machine). No rower.
+const warmupA = [
+  {
+    name: "Easy SkiErg or upright bike",
+    dose: "5 min easy",
+    cues: ["SkiErg: damper 4–5, soft knees, small hip hinge, easy pace", "Or an easy upright bike if that feels better today", "Sit tall and keep it conversational", "Stop well short of getting tired"],
+    mistake: "Turning the warm-up into intervals.",
+    knee: "No rowing until the physio clears your right knee.",
+    links: [{ title: "Mastering SkiErg Form", site: "YouTube · The Barbell Physio", href: yt("klX-UF8mTy8") }],
+  },
+  ...warmup,
 ];
 
 const dayA = [
@@ -60,14 +65,14 @@ const dayA = [
     links: [{ title: "How To Get A Huge Bench Press with Perfect Technique", site: "YouTube · Jeff Nippard", href: yt("vcBig73ojpE") }],
   },
   {
-    name: "Low-to-high cable fly",
-    dose: "3 × 12",
-    cues: ["Pulleys set low, a step forward from the stack", "Slight bend in the elbows, kept fixed", "Sweep up and in to upper-chest height", "Pause at the top, control the stretch down"],
-    mistake: "Bending and straightening the arms, so it becomes a press or curl.",
+    name: "Flat or high-to-low cable fly",
+    dose: "3 × 12, pain-free range",
+    cues: ["Flat cable fly, or pulleys set high and sweep down (high-to-low)", "Skip low-to-high — it hurts the right shoulder", "Slight fixed elbow bend. Stop inside a pain-free range", "If the cable still niggles, do a flat dumbbell fly instead"],
+    mistake: "Forcing the range, or shrugging. Low-to-high is out for now.",
     knee: "Use a split stance you're comfortable with, or sit on a bench between the cables.",
     links: [
-      { title: "Cable Incline Flye", site: "YouTube · Renaissance Periodization", href: yt("UPGRju60F60") },
-      { title: "Low-To-High Cable Fly", site: "YouTube · ScottHermanFitness", href: yt("eQ_NBB6OBH4") },
+      { title: "How To: Cable Fly (High-To-Low)", site: "YouTube · ScottHermanFitness", href: yt("8Um35Es-ROE") },
+      { title: "How to Properly Do a Dumbbell Fly", site: "YouTube · Mind Pump TV", href: yt("QENKPHhQVi4") },
     ],
   },
   {
@@ -327,15 +332,28 @@ const dayC = [
 
 const intervals = [
   {
-    name: "Arm-bike paddle intervals",
-    dose: "5 min easy, 8 × (30s hard / 60s easy), 5 min cool-down",
-    cues: ["Set up like the warm-up: axle at about shoulder height", "Hard: fast and strong, as if paddling for a wave", "Easy: slow spin, catch your breath", "Add one round a week, up to 12"],
-    mistake: "Going so hard in round 1 that the last rounds fall apart.",
-    knee: "Seated with feet flat. No rower or stair machine for now.",
-    links: [
-      { title: "Exercise Tutorial: Technogym Arm Ergometer", site: "YouTube · Travis Tarrant", href: yt("BLVu198om5g") },
-      { title: "15 Minute Intervals + Arms Cycling Workout", site: "YouTube · Move with Char", href: yt("9rS3u2CYycg") },
-    ],
+    name: "Seated battle ropes",
+    dose: "3–4 × 45s, rest 45–60s. You've done 3 × 45s.",
+    cues: ["Sit tall, one rope end in each hand", "Alternating waves, shoulders down", "Torso stays still — drive the waves from the shoulders", "Rest 45–60s. Log each work interval in seconds"],
+    mistake: "Rocking the torso or kneeling on the sore knee.",
+    knee: "Stay seated so the right knee takes no load. Bend the knees slightly if a long sit pulls on them.",
+    links: [{ title: "Battle Rope Seated Waves", site: "YouTube · Dangerously Fit", href: yt("BMS0bK7w4Io") }],
+  },
+  {
+    name: "SkiErg intervals",
+    dose: "30s on / 60s off × 4 rounds at ~70%. Add a round each week, up to 6.",
+    cues: ["Damper 4–5, soft knees, small hip hinge", "30 seconds at about 70%, then 60 seconds easy or off", "Start at 4 rounds. Add one round each week, up to 6", "Log the rounds you finished, and the damper in the level box"],
+    mistake: "Squatting the stroke, or starting so hard the last rounds fall apart.",
+    knee: "No rowing until the physio clears your right knee. SkiErg only.",
+    links: [{ title: "Mastering SkiErg Form", site: "YouTube · The Barbell Physio", href: yt("klX-UF8mTy8") }],
+  },
+  {
+    name: "Straight-arm cable pulldown (paddle stroke)",
+    dose: "3 × 15, slow and controlled",
+    cues: ["High pulley, bar or rope, slight hip hinge", "Arms stay nearly straight, a small fixed elbow bend", "Sweep down like a paddle stroke", "Slow on the way down and on the way back"],
+    mistake: "Bending the elbows or rushing the reps so it becomes a pushdown.",
+    knee: "Soft knees, feet planted. No rower.",
+    links: [{ title: "Straight-Arm Pulldown Complete Guide", site: "YouTube · DeltaBolic", href: yt("zECTZHrvuMg") }],
   },
 ];
 
@@ -384,7 +402,7 @@ const mobility = [
   },
   {
     name: "Dead hang",
-    dose: "3 × 20–30s",
+    dose: "3 × 40s",
     cues: ["Overhand grip, shoulder-width", "Arms straight, body relaxed", "Breathe slowly, no swinging", "Step down when grip fades"],
     mistake: "Jumping up to the bar or dropping off it.",
     knee: "Step up and down from a box. Never jump on or off.",
@@ -396,4 +414,4 @@ const mobility = [
 ];
 
 
-window.EX = { warmup, dayA, dayB, dayC, intervals, mobility };
+window.EX = { warmup, warmupA, dayA, dayB, dayC, intervals, mobility };

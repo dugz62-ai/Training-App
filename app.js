@@ -11,7 +11,8 @@ const SPEC = {
   'Single-arm incline dumbbell press': ['wr', 4, 'Single-arm incline DB press'],
   'Chest-supported row': ['wr', 4, 'Chest-supported row'],
   'Flat barbell bench press': ['wr', 3, 'Bench press'],
-  'Low-to-high cable fly': ['wr', 3, 'Cable fly'],
+  'Low-to-high cable fly': ['wr', 3, 'Low-to-high fly'], // retired; kept so saved logs still format
+  'Flat or high-to-low cable fly': ['wr', 3, 'Cable fly'],
   'KB halos': ['wr', 3, 'KB halos'],
   'KB pullovers': ['wr', 3, 'KB pullovers'],
   'KB single-arm floor press': ['wr', 3, 'KB floor press'],
@@ -39,11 +40,15 @@ const SPEC = {
   'Goblet curl to pullover': ['wr', 3, 'Goblet curl to pullover'],
   'Rope triceps pushdown': ['wr', 3, 'Rope pushdown'],
   'Bird dog': ['r', 3, 'Bird dog'],
-  'Arm-bike paddle intervals': ['int', 1, 'Paddle intervals'],
+  'Arm-bike paddle intervals': ['int', 1, 'Paddle intervals'], // retired; kept so saved logs still format
+  'Seated battle ropes': ['s', 4, 'Battle ropes'],
+  'SkiErg intervals': ['int', 1, 'SkiErg'],
+  'Straight-arm cable pulldown (paddle stroke)': ['wr', 3, 'Paddle pulldown'],
   'Dead hang': ['s', 3, 'Dead hang'],
   'Yoga session': ['min', 1, 'Yoga'],
 };
 const specOf = (ex) => SPEC[ex.name] || ['done', 1, ex.name];
+const sessionWarmup = (def) => (def.gym ? (def.warmup || EX.warmup) : []);
 
 const YOGA = {
   name: 'Yoga session',
@@ -56,10 +61,10 @@ const YOGA = {
 };
 
 const SESSIONS = {
-  A: { label: 'DAY A', title: 'Day A · Chest and posture', short: 'Day A', gym: true, items: EX.dayA },
+  A: { label: 'DAY A', title: 'Day A · Chest and posture', short: 'Day A', gym: true, warmup: EX.warmupA, items: EX.dayA },
   B: { label: 'DAY B', title: 'Day B · Back, shoulders and core', short: 'Day B', gym: true, items: EX.dayB },
   C: { label: 'DAY C', title: 'Day C · Chest, arms and push-ups', short: 'Day C', gym: true, items: EX.dayC },
-  P: { label: 'PADDLE + MOBILITY', title: 'Paddle intervals + mobility', short: 'Paddle', gym: false, items: [...EX.intervals, ...EX.mobility] },
+  P: { label: 'PADDLE + MOBILITY', title: 'Paddle conditioning + mobility', short: 'Paddle', gym: false, items: [...EX.intervals, ...EX.mobility] },
   M: { label: 'MOBILITY / YOGA', title: 'Mobility & yoga (or rest)', short: 'Mobility/yoga', gym: false, items: [...EX.mobility, YOGA] },
 };
 const WEEK = [ // Mon..Sun
@@ -121,15 +126,16 @@ function entryText(ex, e) {
 function sessionText(s) {
   const def = SESSIONS[s.key];
   const lines = [`${def.label} – ${s.date}`, `Knee: ${s.knee || '?'}`];
-  if (def.gym) { const wu = EX.warmup.filter((ex) => s.entries[ex.name]?.done).length; lines.push(`Warm-up: ${wu}/${EX.warmup.length}`); }
+  const wuList = sessionWarmup(def);
+  if (def.gym) { const wu = wuList.filter((ex) => s.entries[ex.name]?.done).length; lines.push(`Warm-up: ${wu}/${wuList.length}`); }
   const listed = new Set();
   for (const ex of def.items) {
     listed.add(ex.name);
     const e = s.entries[ex.name]; if (!e) continue;
     const t = entryText(ex, e); if (t) lines.push(`${specOf(ex)[2]}: ${t}`);
   }
-  // Exercises removed from the programme (old Incline dumbbell press logs) still print.
-  const warmupNames = new Set(EX.warmup.map((ex) => ex.name));
+  // Exercises removed from the programme (old incline press, arm-bike, low-to-high fly) still print.
+  const warmupNames = new Set(wuList.map((ex) => ex.name));
   for (const name of Object.keys(s.entries || {})) {
     if (listed.has(name) || warmupNames.has(name)) continue;
     const t = entryText({ name }, s.entries[name]); if (t) lines.push(`${specOf({ name })[2]}: ${t}`);
@@ -188,7 +194,7 @@ function blankSets(n) { const sets = []; for (let i = 0; i < n; i++) sets.push({
 function ensureEntries(draft, key) {
   const def = SESSIONS[key];
   draft.entries = draft.entries || {};
-  const all = (def.gym ? EX.warmup : []).concat(def.items);
+  const all = sessionWarmup(def).concat(def.items);
   for (const ex of all) {
     const [type, n] = specOf(ex);
     const e = draft.entries[ex.name];
@@ -207,7 +213,7 @@ function newDraft(key) {
   if (saved) { const c = JSON.parse(JSON.stringify(saved)); c._day = date; return ensureEntries(c, key); } // re-open today's saved session for edits
   const entries = {};
   const def = SESSIONS[key];
-  const all = (def.gym ? EX.warmup : []).concat(def.items);
+  const all = sessionWarmup(def).concat(def.items);
   for (const ex of all) {
     const [type, n] = specOf(ex);
     if (type === 'done') { entries[ex.name] = { done: false }; continue; }
@@ -275,8 +281,8 @@ function renderSession(key) {
     <div class="pickers">${pick}</div>
     ${def.gym ? `<div class="banner"><b>⚠ Knee first:</b> no squats, lunges, cossacks, KB swings or cleans, running or rowing until the physio clears the knee (Martine, 12 Nov). Stop anything that hurts the knee.</div>` : ''}
     <div class="sesshead"><h2>${esc(def.title)}</h2><input type="date" class="datein" id="sdate" value="${esc(cur.date)}" aria-label="Session date"></div>
-    ${def.gym ? `<details class="card group" ${hasAnyWarmup() ? '' : 'open'}><summary>🔥 Warm-up · about 10 min</summary>${EX.warmup.map((ex) => exCard(ex)).join('')}</details>` : ''}
-    ${key === 'P' ? '<h2>Paddle intervals</h2>' + exCard(EX.intervals[0]) + '<h2>Mobility routine · ~10 min</h2>' + EX.mobility.map((ex) => exCard(ex)).join('')
+    ${def.gym ? `<details class="card group" ${hasAnyWarmup() ? '' : 'open'}><summary>🔥 Warm-up · about 10 min</summary>${sessionWarmup(def).map((ex) => exCard(ex)).join('')}</details>` : ''}
+    ${key === 'P' ? '<h2>Paddle conditioning</h2><div class="card muted small">Pick one, or rotate through them. No arm bike, and no rower until the physio clears the right knee.</div>' + EX.intervals.map((ex) => exCard(ex)).join('') + '<h2>Mobility routine · ~10 min</h2>' + EX.mobility.map((ex) => exCard(ex)).join('')
       : key === 'M' ? '<div class="card muted small">Weekend: do the mobility routine and/or a yoga session, or take a full rest day.</div><h2>Mobility routine · ~10 min</h2>' + EX.mobility.map((ex) => exCard(ex)).join('') + '<h2>Yoga</h2>' + exCard(YOGA)
       : def.items.map((ex) => exCard(ex)).join('')}
     <div class="card"><h3>Knee today</h3>
@@ -285,7 +291,7 @@ function renderSession(key) {
     <button class="btn primary" id="save">Save session</button>
     <button class="btn ghost" id="send">Send to coach</button>
     <p class="muted small" style="text-align:center">Inputs auto-save as a draft on this phone until you press Save.</p>`;
-  function hasAnyWarmup() { return EX.warmup.some((ex) => cur.entries[ex.name]?.done); }
+  function hasAnyWarmup() { return sessionWarmup(def).some((ex) => cur.entries[ex.name]?.done); }
 }
 
 function onSessionInput(e) {
@@ -346,7 +352,7 @@ function renderHistory() {
       <div class="row2"><button class="btn ghost" data-share="${esc(s.id)}">Send to coach</button><button class="btn danger" data-del="${esc(s.id)}">Delete</button></div></details>`).join('');
   // progress per exercise, oldest → newest
   const asc = [...ss].reverse();
-  const retired = [{ name: 'Incline dumbbell press' }];
+  const retired = [{ name: 'Incline dumbbell press' }, { name: 'Low-to-high cable fly' }, { name: 'Arm-bike paddle intervals' }];
   const exs = [EX.dayA, EX.dayB, EX.dayC, EX.intervals, [EX.mobility.find((e) => e.name === 'Dead hang')], [YOGA], retired].flat();
   const charts = exs.map((ex) => {
     const pts = asc.map((s) => s.entries[ex.name] && metricFor(ex, s.entries[ex.name]) ? { d: s.date, ...metricFor(ex, s.entries[ex.name]) } : null).filter(Boolean);
