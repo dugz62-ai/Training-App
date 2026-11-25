@@ -17,19 +17,22 @@ const SPEC = {
   'KB pullovers': ['wr', 3, 'KB pullovers'],
   'KB single-arm floor press': ['wr', 3, 'KB floor press'],
   'Dead bug': ['r', 3, 'Dead bug'],
-  'Prone Y-T-W raises (light plates)': ['wr', 2, 'Y-T-W'],
-  'Prone cobra hold': ['s', 3, 'Cobra hold'],
+  'Prone Y-T-W raises (light plates)': ['wr', 2, 'Y-T-W'], // retired name; logs still format
+  'Prone Y-T-W raises (bodyweight)': ['r', 2, 'Y-T-W'],
+  'Prone cobra hold': ['s', 3, 'Cobra hold'], // retired
   'Lat pulldown or assisted pull-up': ['wr', 4, 'Lat pulldown'],
   'Seated dumbbell shoulder press': ['wr', 3, 'Seated DB shoulder press'],
   'Single-arm kettlebell row': ['wr', 3, 'KB single-arm row'],
-  'Suitcase hold': ['ws', 3, 'Suitcase hold'],
-  'Overhead KB hold': ['ws', 3, 'Overhead KB hold'],
+  'Suitcase hold': ['ws', 3, 'Suitcase hold'], // retired; static hold, kept so old logs format
+  'Suitcase or farmer carry': ['ws', 3, 'Suitcase carry'],
+  'Overhead KB hold': ['ws', 3, 'Overhead KB hold'], // retired
   'Straight-arm cable pulldown': ['wr', 3, 'Straight-arm pulldown'],
   'Cable external rotation': ['wr', 3, 'Cable ext rotation'],
   'KB side bends': ['ws', 3, 'KB side bends'],
   'Hollow hold': ['s', 3, 'Hollow hold'],
   'Single-arm plank': ['s', 3, 'Single-arm plank'],
-  'Superman hold': ['s', 3, 'Superman hold'],
+  'Superman hold': ['s', 3, 'Superman hold'], // retired
+  'Inverted-row isometric holds': ['s', 3, 'Inverted-row hold'],
   'Paused flat dumbbell press': ['wr', 4, 'Paused DB press'],
   'Archer push-ups': ['r', 3, 'Archer push-ups'],
   'Pike push-ups': ['r', 3, 'Pike push-ups'],
@@ -40,12 +43,25 @@ const SPEC = {
   'Goblet curl to pullover': ['wr', 3, 'Goblet curl to pullover'],
   'Rope triceps pushdown': ['wr', 3, 'Rope pushdown'],
   'Bird dog': ['r', 3, 'Bird dog'],
+  'Light glute bridge': ['wr', 3, 'Glute bridge'],
   'Arm-bike paddle intervals': ['int', 1, 'Paddle intervals'], // retired; kept so saved logs still format
   'Seated battle ropes': ['s', 4, 'Battle ropes'],
   'SkiErg intervals': ['int', 1, 'SkiErg'],
   'Straight-arm cable pulldown (paddle stroke)': ['wr', 3, 'Paddle pulldown'],
   'Dead hang': ['s', 3, 'Dead hang'],
   'Yoga session': ['min', 1, 'Yoga'],
+  'Stick or broom mobility opener': ['done', 1, 'Stick opener'],
+  'Travel circuit (how this session works)': ['done', 1, 'Travel circuit'],
+  'Grounded rotation (seated, tall-kneeling or quadruped)': ['r', 3, 'Grounded rotation'],
+  'KB floor press or push-ups': ['wr', 3, 'KB floor press'],
+  'Light goblet squat or reverse lunge': ['wr', 3, 'Goblet squat'],
+  'Band dislocates (shoulder pass-throughs)': ['done', 1, 'Band dislocates'], // retired
+  '90/90 hip switches': ['done', 1, '90/90 switches'], // retired
+};
+// Renames that should still find the previous log. Different exercises stay unaliased.
+const ALIAS = {
+  'Prone Y-T-W raises (bodyweight)': ['Prone Y-T-W raises (light plates)'],
+  'Suitcase or farmer carry': ['Suitcase hold'],
 };
 const specOf = (ex) => SPEC[ex.name] || ['done', 1, ex.name];
 const sessionWarmup = (def) => (def.gym ? (def.warmup || EX.warmup) : []);
@@ -64,6 +80,7 @@ const SESSIONS = {
   A: { label: 'DAY A', title: 'Day A · Chest and posture', short: 'Day A', gym: true, warmup: EX.warmupA, items: EX.dayA },
   B: { label: 'DAY B', title: 'Day B · Back, shoulders and core', short: 'Day B', gym: true, items: EX.dayB },
   C: { label: 'DAY C', title: 'Day C · Chest, arms and push-ups', short: 'Day C', gym: true, items: EX.dayC },
+  T: { label: 'TRAVEL KB', title: 'Travel KB · 30 min', short: 'Travel KB', gym: false, kneeBanner: true, items: EX.travelKB },
   P: { label: 'PADDLE + MOBILITY', title: 'Paddle conditioning + mobility', short: 'Paddle', gym: false, items: [...EX.intervals, ...EX.mobility] },
   M: { label: 'MOBILITY / YOGA', title: 'Mobility & yoga (or rest)', short: 'Mobility/yoga', gym: false, items: [...EX.mobility, YOGA] },
 };
@@ -87,11 +104,22 @@ const saveDraft = (key, d) => localStorage.setItem(draftKey(key), JSON.stringify
 const clearDraft = (key) => localStorage.removeItem(draftKey(key));
 const sorted = () => load().sort((a, b) => (b.date + b.savedAt).localeCompare(a.date + a.savedAt));
 
+function loggedEntry(entries, exName) {
+  if (!entries) return null;
+  if (entries[exName] && hasData(entries[exName])) return entries[exName];
+  for (const alt of (ALIAS[exName] || [])) {
+    if (entries[alt] && hasData(entries[alt])) return entries[alt];
+  }
+  return null;
+}
 function lastEntry(exName, beforeDate) {
+  const names = [exName, ...(ALIAS[exName] || [])];
   for (const s of sorted()) {
     if (beforeDate && s.date >= beforeDate) continue;
-    const e = s.entries && s.entries[exName];
-    if (e && hasData(e)) return { date: s.date, entry: e };
+    for (const name of names) {
+      const e = s.entries && s.entries[name];
+      if (e && hasData(e)) return { date: s.date, entry: e, name };
+    }
   }
   return null;
 }
@@ -188,15 +216,108 @@ document.addEventListener('click', (e) => {
 
 // ---------- session screen ----------
 let cur = null; // { key, date, knee, notes, entries }
+let prefillMask = null; // which inputs on a fresh session are suggestions; never stored
 
 function blankSets(n) { const sets = []; for (let i = 0; i < n; i++) sets.push({ w: '', r: '' }); return sets; }
+
+// Dose text → sets and the work number (reps, seconds, rounds or minutes).
+// A range uses the low end. Text after "·" is a build-to note, not today's target.
+function doseMain(dose) { return String(dose || '').split('·')[0]; }
+function parseWork(dose, type) {
+  const text = doseMain(dose);
+  if (type === 'int') {
+    const rounds = text.match(/(\d+)\s*rounds?/i);
+    const level = text.match(/(?:damper|level)\s*(\d+(?:[.,]\d+)?)/i);
+    if (!rounds && !level) return null;
+    return { sets: 1, setsHigh: null, work: rounds ? rounds[1] : '', level: level ? level[1].replace(',', '.') : '' };
+  }
+  if (type === 'min') {
+    const m = text.match(/(\d+)(?:\s*[–\-]\s*\d+)?\s*min/i);
+    return m ? { sets: 1, setsHigh: null, work: m[1], level: '' } : null;
+  }
+  const sm = text.match(/(\d+)(?:\s*[–\-]\s*(\d+))?\s*(?:×|x|rounds?\b)/i);
+  const sets = sm ? +sm[1] : null;
+  const setsHigh = sm && sm[2] ? +sm[2] : null;
+  let work = '';
+  if (type === 's' || type === 'ws') {
+    const workPart = text.split(/\brest\b|\byou've\b/i)[0];
+    const sec = workPart.match(/(\d+)(?:\s*[–\-]\s*\d+)?\s*s\b/i);
+    if (sec) work = sec[1];
+  } else {
+    const afterX = text.match(/×\s*(\d+)/);
+    const afterColon = text.match(/:\s*(\d+)/);
+    if (afterX) work = afterX[1];
+    else if (afterColon) work = afterColon[1];
+  }
+  if (!work && sets == null) return null;
+  return { sets, setsHigh, work, level: '' };
+}
+// "@ 22 kg" is an explicit target. "@ 10–12 kg" is a range, so it does not override a previous log.
+function kgInDose(dose, singleOnly) {
+  const m = String(dose || '').match(/@\s*(\d+(?:[.,]\d+)?)(\s*[–\-]\s*\d+(?:[.,]\d+)?)?\s*kg/i);
+  if (!m) return '';
+  if (singleOnly && m[2]) return '';
+  return m[1].replace(',', '.');
+}
+function logCount(ex) {
+  const [type, specN] = specOf(ex);
+  if (type === 'done' || type === 'int' || type === 'min') return specN;
+  const parsed = parseWork(ex.dose, type);
+  if (!parsed || parsed.sets == null) return specN;
+  if (parsed.setsHigh) return Math.max(specN, parsed.setsHigh);
+  return parsed.sets;
+}
+function applyParsed(sets, mask, parsed, n, weight) {
+  if (!parsed || !parsed.work) return false;
+  const count = parsed.sets == null ? n : Math.min(n, parsed.sets);
+  for (let i = 0; i < count; i++) {
+    if (weight) { sets[i].w = weight; mask[i].w = true; }
+    sets[i].r = String(parsed.work);
+    mask[i].r = true;
+  }
+  if (parsed.level) { sets[0].w = parsed.level; mask[0].w = true; }
+  return true;
+}
+// (a) explicit programme target, else (b) last logged sets, else (c) the dose.
+function suggestionFor(ex, date) {
+  const [type] = specOf(ex);
+  const n = logCount(ex);
+  const sets = blankSets(n);
+  const mask = sets.map(() => ({ w: false, r: false }));
+  if (type === 'done') return { sets: null, mask: null };
+  const parsed = parseWork(ex.dose, type);
+  const explicit = (type === 'wr' || type === 'ws') ? kgInDose(ex.dose, true) : '';
+  if (explicit && applyParsed(sets, mask, parsed, n, explicit)) return { sets, mask };
+  const last = lastEntry(ex.name, date);
+  const lastSets = last && last.entry.sets ? last.entry.sets.filter((s) => filled(s.r)) : [];
+  if (lastSets.length) {
+    const weighted = type === 'wr' || type === 'ws' || type === 'int';
+    for (let i = 0; i < n; i++) {
+      const src = lastSets[i];
+      if (src) {
+        if (weighted && filled(src.w)) { sets[i].w = String(src.w); mask[i].w = true; }
+        sets[i].r = String(src.r);
+        mask[i].r = true;
+      } else if (weighted) {
+        const prev = lastSets[lastSets.length - 1];
+        if (prev && filled(prev.w)) { sets[i].w = String(prev.w); mask[i].w = true; }
+      }
+    }
+    return { sets, mask };
+  }
+  const doseW = (type === 'wr' || type === 'ws') ? kgInDose(ex.dose, false) : '';
+  applyParsed(sets, mask, parsed, n, doseW);
+  return { sets, mask };
+}
+
 // Old drafts and saved sessions predate new exercises. Fill any missing rows so the card can render.
 function ensureEntries(draft, key) {
   const def = SESSIONS[key];
   draft.entries = draft.entries || {};
   const all = sessionWarmup(def).concat(def.items);
   for (const ex of all) {
-    const [type, n] = specOf(ex);
+    const [type] = specOf(ex);
+    const n = logCount(ex);
     const e = draft.entries[ex.name];
     if (!e) { draft.entries[ex.name] = type === 'done' ? { done: false } : { sets: blankSets(n) }; continue; }
     if (type === 'done') { if (e.done === undefined) e.done = false; continue; }
@@ -206,28 +327,29 @@ function ensureEntries(draft, key) {
   return draft;
 }
 function newDraft(key) {
+  prefillMask = null;
   const date = todayISO();
   const d = loadDraft(key);
-  if (d && d._day === date) return ensureEntries(d, key);
+  if (d && d._day === date) {
+    const draft = ensureEntries(d, key);
+    if (draft._prefill) prefillMask = draft._prefill;
+    return draft;
+  }
   const saved = load().find((x) => x.key === key && x.date === date);
-  if (saved) { const c = JSON.parse(JSON.stringify(saved)); c._day = date; return ensureEntries(c, key); } // re-open today's saved session for edits
+  if (saved) { const c = JSON.parse(JSON.stringify(saved)); c._day = date; delete c._prefill; return ensureEntries(c, key); } // re-open today's saved session for edits
   const entries = {};
+  const mask = {};
   const def = SESSIONS[key];
   const all = sessionWarmup(def).concat(def.items);
   for (const ex of all) {
-    const [type, n] = specOf(ex);
+    const [type] = specOf(ex);
     if (type === 'done') { entries[ex.name] = { done: false }; continue; }
-    const last = lastEntry(ex.name, date);
-    const lastSets = last ? last.entry.sets.filter((s) => filled(s.r)) : [];
-    const sets = [];
-    for (let i = 0; i < n; i++) {
-      const ls = lastSets[i] || lastSets[lastSets.length - 1];
-      // pre-fill weight (and level for intervals) with the last logged value
-      sets.push({ w: (type === 'wr' || type === 'ws' || type === 'int') && ls && filled(ls.w) ? ls.w : '', r: '' });
-    }
-    entries[ex.name] = { sets };
+    const sug = suggestionFor(ex, date);
+    entries[ex.name] = { sets: sug.sets };
+    mask[ex.name] = sug.mask;
   }
-  return { key, date, _day: date, knee: '', notes: '', entries };
+  prefillMask = mask;
+  return { key, date, _day: date, knee: '', notes: '', entries, _prefill: mask };
 }
 
 // ---------- voice logging ----------
@@ -450,11 +572,13 @@ function applyVoice(box) {
   if (parsed.sets.some((s) => filled(s.r))) {
     for (let i = parsed.sets.length; i < en.sets.length; i++) en.sets[i].r = '';
   }
+  const vMask = cur._prefill && cur._prefill[card.dataset.ex];
   en.sets.forEach((s, i) => {
     const wIn = card.querySelector(`input[data-set="${i}"][data-k="w"]`);
     const rIn = card.querySelector(`input[data-set="${i}"][data-k="r"]`);
-    if (wIn) wIn.value = s.w;
-    if (rIn) rIn.value = s.r;
+    if (wIn) { wIn.value = s.w; wIn.classList.remove('prefill'); }
+    if (rIn) { rIn.value = s.r; rIn.classList.remove('prefill'); }
+    if (vMask && vMask[i]) { vMask[i].w = false; vMask[i].r = false; }
   });
   saveDraft(cur.key, cur);
   box.hidden = true;
@@ -501,28 +625,33 @@ function listenInto(box, button) {
   try { rec.start(); } catch { stopRec(); openVoiceBox(box, voiceFailMessage('unavailable')).focus(); }
 }
 
-function field(type, i, which, val, ph) {
+function field(type, i, which, val, ph, suggested) {
   const unit = which === 'w' ? (type === 'int' ? 'lvl' : 'kg') : (UNIT[type] || 'reps');
   const mode = which === 'w' ? 'decimal' : 'numeric';
-  return `<label class="field"><input inputmode="${mode}" data-set="${i}" data-k="${which}" value="${esc(val)}" placeholder="${esc(ph || '')}" aria-label="${unit} set ${i + 1}"><span>${unit}</span></label>`;
+  const cls = suggested && filled(val) ? ' class="prefill"' : '';
+  return `<label class="field"><input${cls} inputmode="${mode}" data-set="${i}" data-k="${which}" value="${esc(val)}" placeholder="${esc(ph || '')}" aria-label="${unit} set ${i + 1}"><span>${unit}</span></label>`;
 }
 
 function exCard(ex, opts = {}) {
   const [type] = specOf(ex);
   const e = cur.entries[ex.name] || {};
   const last = type !== 'done' ? lastEntry(ex.name, cur.date) : null;
-  const lastTxt = last ? entryText(ex, last.entry) : '';
+  const lastTxt = last ? entryText({ name: last.name || ex.name }, last.entry) : '';
   const lastSets = last ? (last.entry.sets || []).filter((s) => filled(s.r)) : [];
+  const mask = (prefillMask && prefillMask[ex.name]) || [];
   let body = '';
   if (type === 'done') {
     body = `<label class="check"><input type="checkbox" data-done ${e.done ? 'checked' : ''}> Done</label>`;
   } else {
     const rows = (e.sets || []).map((s, i) => {
       const ph = lastSets[i] ? lastSets[i].r : '';
+      const mw = mask[i] && mask[i].w;
+      const mr = mask[i] && mask[i].r;
       if (type === 'wr' || type === 'ws' || type === 'int') {
-        return `<div class="setrow"><div class="setno">${type === 'int' ? '' : i + 1}</div>${type === 'int' ? field(type, i, 'r', s.r, ph) + field(type, i, 'w', s.w, '') : field(type, i, 'w', s.w, '') + field(type, i, 'r', s.r, ph)}</div>`;
+        const rw = type === 'int' ? field(type, i, 'r', s.r, ph, mr) + field(type, i, 'w', s.w, '', mw) : field(type, i, 'w', s.w, '', mw) + field(type, i, 'r', s.r, ph, mr);
+        return `<div class="setrow"><div class="setno">${type === 'int' ? '' : i + 1}</div>${rw}</div>`;
       }
-      return `<div class="setrow one"><div class="setno">${type === 'min' ? '' : i + 1}</div>${field(type, i, 'r', s.r, ph)}</div>`;
+      return `<div class="setrow one"><div class="setno">${type === 'min' ? '' : i + 1}</div>${field(type, i, 'r', s.r, ph, mr)}</div>`;
     }).join('');
     body = `<div class="sets">${rows}</div>`;
   }
@@ -549,7 +678,8 @@ function renderSession(key) {
   const def = SESSIONS[key];
   cur = newDraft(key);
   const tk = todayKey(), dow = todayDow();
-  const selDay = key === tk ? dow : WEEK.find((w) => w[1] === key)[0];
+  const weekHit = WEEK.find((w) => w[1] === key);
+  const selDay = key === tk ? dow : (weekHit ? weekHit[0] : '');
   const week = WEEK.map(([d, k]) => `<a href="#/s/${k}" class="${d === dow ? 'today' : ''} ${d === selDay ? 'sel' : ''}"><b>${d}</b>${k === 'M' ? 'Mob' : SESSIONS[k].short}</a>`).join('');
   const pick = Object.entries(SESSIONS).map(([k, s]) => `<a href="#/s/${k}" class="${k === key ? 'sel' : ''}">${esc(s.short)}${k === tk ? ' • today' : ''}</a>`).join('');
   $('#title').textContent = key === tk ? 'Today' : 'Session';
@@ -557,7 +687,8 @@ function renderSession(key) {
   $('#app').innerHTML = `
     <div class="week">${week}</div>
     <div class="pickers">${pick}</div>
-    ${def.gym ? `<div class="banner"><b>⚠ Knee first:</b> no squats, lunges, cossacks, KB swings or cleans, running or rowing until the physio clears the knee (Martine, 12 Nov). Stop anything that hurts the knee.</div>` : ''}
+    ${def.gym || def.kneeBanner ? `<div class="banner"><b>Knee:</b> physio review pending. Light, controlled squats and reverse lunges only. No swings, cleans, jumping, pivoting or heavy/deep leg work.</div>` : ''}
+    ${prefillMask ? '<p class="prefill-note">Sets are prefilled from the programme target, or your last session. Edit any that differed — they are saved as shown. Dashed boxes are still suggestions.</p>' : ''}
     <div class="sesshead"><h2>${esc(def.title)}</h2><input type="date" class="datein" id="sdate" value="${esc(cur.date)}" aria-label="Session date"></div>
     ${def.gym ? `<details class="card group" ${hasAnyWarmup() ? '' : 'open'}><summary>🔥 Warm-up · about 10 min</summary>${sessionWarmup(def).map((ex) => exCard(ex)).join('')}</details>` : ''}
     ${key === 'P' ? '<h2>Paddle conditioning</h2><div class="card muted small">Pick one, or rotate through them. No arm bike, and no rower until the physio clears the right knee.</div>' + EX.intervals.map((ex) => exCard(ex)).join('') + '<h2>Mobility routine · ~10 min</h2>' + EX.mobility.map((ex) => exCard(ex)).join('')
@@ -589,13 +720,21 @@ function onSessionInput(e) {
     const card = t.closest('[data-ex]'); if (!card) return;
     const en = cur.entries[card.dataset.ex];
     if (t.hasAttribute('data-done')) { en.done = t.checked; card.classList.toggle('done', t.checked); }
-    else if (t.dataset.set !== undefined) en.sets[+t.dataset.set][t.dataset.k] = t.value.trim();
+    else if (t.dataset.set !== undefined) {
+      const i = +t.dataset.set, k = t.dataset.k;
+      en.sets[i][k] = t.value.trim();
+      t.classList.remove('prefill');
+      const row = cur._prefill && cur._prefill[card.dataset.ex] && cur._prefill[card.dataset.ex][i];
+      if (row) row[k] = false;
+    }
   }
   saveDraft(cur.key, cur);
 }
 
 function saveSession() {
-  const s = JSON.parse(JSON.stringify(cur)); delete s._day;
+  const s = JSON.parse(JSON.stringify(cur));
+  delete s._day;
+  delete s._prefill;
   const any = Object.values(s.entries).some(hasData);
   if (!any && !filled(s.notes)) { toast('Log at least one set first'); return null; }
   const all = load();
@@ -638,10 +777,21 @@ function renderHistory() {
       <div class="row2"><button class="btn ghost" data-share="${esc(s.id)}">Send to coach</button><button class="btn danger" data-del="${esc(s.id)}">Delete</button></div></details>`).join('');
   // progress per exercise, oldest → newest
   const asc = [...ss].reverse();
-  const retired = [{ name: 'Incline dumbbell press' }, { name: 'Low-to-high cable fly' }, { name: 'Arm-bike paddle intervals' }];
-  const exs = [EX.dayA, EX.dayB, EX.dayC, EX.intervals, [EX.mobility.find((e) => e.name === 'Dead hang')], [YOGA], retired].flat();
+  const retired = [
+    { name: 'Incline dumbbell press' }, { name: 'Low-to-high cable fly' }, { name: 'Arm-bike paddle intervals' },
+    { name: 'Prone cobra hold' }, { name: 'Superman hold' }, { name: 'Overhead KB hold' },
+  ];
+  const seen = new Set();
+  const exs = [EX.dayA, EX.dayB, EX.dayC, EX.travelKB, EX.intervals, [EX.mobility.find((e) => e.name === 'Dead hang')], [YOGA], retired].flat().filter((ex) => {
+    if (!ex || seen.has(ex.name)) return false;
+    seen.add(ex.name);
+    return true;
+  });
   const charts = exs.map((ex) => {
-    const pts = asc.map((s) => s.entries[ex.name] && metricFor(ex, s.entries[ex.name]) ? { d: s.date, ...metricFor(ex, s.entries[ex.name]) } : null).filter(Boolean);
+    const pts = asc.map((s) => {
+      const e = loggedEntry(s.entries, ex.name);
+      return e && metricFor(ex, e) ? { d: s.date, ...metricFor(ex, e) } : null;
+    }).filter(Boolean);
     if (!pts.length) return '';
     const best = Math.max(...pts.map((p) => p.v)), lastP = pts[pts.length - 1];
     const label = (specOf(ex)[0] === 'wr' || specOf(ex)[0] === 'ws') && lastP.u === 'kg' ? 'Top weight' : 'Best set';
@@ -731,5 +881,5 @@ window.addEventListener('hashchange', route);
 route();
 
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
-window.__dt = { sessionText, load, parseVoice }; // for testing
+window.__dt = { sessionText, load, parseVoice, parseWork, suggestionFor, logCount, kgInDose }; // for testing
 })();

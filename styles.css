@@ -72,6 +72,9 @@ h3 { font-size: 16px; margin: 0; }
 .field { position: relative; }
 .field input { width: 100%; min-height: var(--tap); border-radius: 10px; border: 1px solid var(--line); background: var(--bg); padding: 8px 44px 8px 12px; font-size: 18px; font-variant-numeric: tabular-nums; }
 .field input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+.field input.prefill { color: var(--muted); border-style: dashed; }
+.field input.prefill:focus { color: var(--text); border-style: solid; }
+.prefill-note { color: var(--muted); font-size: 13px; margin: 0 4px 10px; }
 .field span { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 13px; pointer-events: none; }
 .check { display: flex; align-items: center; gap: 10px; margin-top: 10px; min-height: var(--tap); font-size: 16px; }
 .check input { width: 26px; height: 26px; accent-color: var(--accent); }
